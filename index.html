@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hex Empires</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: #173450; }
+  body { font: 15px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #f4f1ea; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; touch-action: none; }
+  #top { position: fixed; top: max(8px, env(safe-area-inset-top)); left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; padding: 0 8px; }
+  #chips { display: flex; gap: 6px; width: min(100%, 640px); justify-content: center; }
+  #chips .chip { flex: 1 1 0; }
+  .chip { display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 999px; background: #0d1a2acc; backdrop-filter: blur(6px); min-width: 0; max-width: 170px;
+          box-sizing: border-box; transition: box-shadow .25s; }
+  .chip.turn { box-shadow: 0 0 0 2px var(--c), 0 0 16px var(--c); }
+  .chip.out { opacity: .45; text-decoration: line-through; }
+  .chip .sw { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 800; font-size: 13px; color: #fff; text-shadow: 0 1px 2px #0008; }
+  .chip .nm { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .chip .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
+  #status { font-weight: 800; font-size: 17px; text-shadow: 0 2px 6px #000c; text-align: center; }
+  #panel { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(max(6px, env(safe-area-inset-bottom)) + 18px); width: min(640px, calc(100vw - 16px)); box-sizing: border-box;
+           padding: 8px 10px; border-radius: 16px; background: #0d1a2ae6; backdrop-filter: blur(6px); border: 1px solid #ffffff1f; }
+  #res { display: flex; gap: 14px; align-items: center; font-weight: 800; font-size: 16px; flex-wrap: wrap; }
+  #res small { font-weight: 600; opacity: .65; font-size: 12px; margin-left: 2px; }
+  #res .rd { margin-left: auto; font-size: 13px; opacity: .8; }
+  #info { margin: 6px 0 2px; font-size: 13px; opacity: .85; min-height: 17px; }
+  #acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  #acts button, #end { min-height: 44px; padding: 0 12px; border-radius: 12px; border: 0; background: #2c4a6b; color: #fff; font: 700 14px system-ui, sans-serif; cursor: pointer; }
+  #acts button small { opacity: .75; font-weight: 600; margin-left: 4px; }
+  #acts button:disabled { opacity: .4; cursor: default; }
+  #end { margin-left: auto; background: #ffd166; color: #2a1d00; }
+  #end.pulse { animation: glow 1s ease-in-out infinite; }
+  @keyframes glow { 50% { box-shadow: 0 0 0 5px #ffd16666; } }
+  #net { position: fixed; bottom: max(3px, env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; font-size: 12px; opacity: .7; pointer-events: none; }
+  #toast { position: fixed; top: 30%; left: 50%; transform: translateX(-50%); padding: 8px 16px; border-radius: 999px; background: #000b; font-weight: 700; max-width: calc(100vw - 32px);
+           box-sizing: border-box; text-align: center; pointer-events: none; transition: opacity .4s; }
+  .pop { position: fixed; left: 0; top: 0; font-weight: 900; font-size: 18px; pointer-events: none; text-shadow: 0 2px 3px #000c, 0 0 2px #000; white-space: nowrap; }
+  #over { position: fixed; inset: 0; display: grid; place-items: center; background: #0007; }
+  #over[hidden], #panel[hidden] { display: none; }
+  .card { box-sizing: border-box; width: min(380px, calc(100vw - 32px)); max-height: 86vh; overflow: auto; padding: 20px; border-radius: 18px; background: #12213a; border: 1px solid #ffffff22; text-align: center; }
+  .card h2 { margin: 0; font-size: 26px; } .card p { margin: 4px 0 12px; opacity: .8; }
+  .card h3 { margin: 8px 0 4px; font-size: 13px; color: #ffd166; text-align: left; }
+  .card ol { text-align: left; margin: 0 0 12px; padding-left: 24px; font-size: 14px; min-height: 24px; }
+  .card li span { float: right; }
+  .card .sq { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+  .card button { width: 100%; min-height: 48px; border-radius: 12px; border: 0; font: 700 16px system-ui, sans-serif; cursor: pointer; margin-top: 8px; }
+  #again { background: #ffd166; color: #2a1d00; } #look { background: #ffffff1a; color: #fff; }
+  .hide { display: none !important; }
+</style>
+<script src="https://cdn.multiplayeragent.com/sdk/mp.global.js"></script>
+<script type="importmap">{ "imports": { "three": "./libs/three.module.min.js" } }</script>
+</head>
+<body>
+<div id="top"><div id="chips"></div><div id="status"></div></div>
+<div id="toast" style="opacity:0"></div>
+<div id="panel" hidden>
+  <div id="res"></div>
+  <div id="info"></div>
+  <div id="acts"></div>
+</div>
+<div id="net">Connecting…</div>
+<div id="over" hidden><div class="card">
+  <h2 id="overTitle"></h2><p id="overWhy"></p>
+  <ol id="standings"></ol>
+  <h3>Most wins</h3><ol id="board"><li>Loading…</li></ol>
+  <button id="again">Play again</button><button id="look">Look at the map</button>
+</div></div>
+<script type="module">
+/* ═══ HEX EMPIRES · a Multiplayer Agent starter ═══════════════════════════════════════════
+ * A mini 4X on a seeded hex island: claim land, gather food, wood and stone, build farms and
+ * towers, train soldiers and catapults, take the rivals' castles. Turn-based, 2–4 players;
+ * bots rule the empty empires. About 15 minutes a match.
+ *
+ * WHERE THINGS ARE (search for the "── " headers):
+ *   CONFIG ........ island size, rounds, timers, costs, units, castle and tower strength, colors
+ *   CONNECTION .... MP_CONNECT, joining, the offline room, who is host
+ *   MAP ........... hex maths, the seeded island (terrain + castle spots), tile lookups
+ *   RULES ......... every action (claim, farm, tower, train, move, attack, end turn) as one
+ *                   function that checks it and returns the new game, or null if it's not allowed
+ *   BOT ........... how a bot ruler picks its next action
+ *   GAME (HOST) ... seats, bot turns, the turn timer, the end. Only the host writes `game`.
+ *   SCENE ......... renderer, lights, the sea, the hex tiles, trees, rocks and mountains
+ *   MODELS ........ territory tint and borders, farms, towers, castles, soldiers, catapults
+ *   VIEW .......... turning `game` into the scene: walking, fighting, building, particles
+ *   MY TURN ....... selecting tiles and units, the markers, sending actions
+ *   HUD & RESULTS . chips, status, the action panel, the results card, leaderboard, sounds
+ *   INPUT / LOOP .. taps and keys, the camera, the main loop
+ *
+ * HOW THE MULTIPLAYER WORKS (a relay room: no server code):
+ *   - The whole match lives in ONE shared field, `game`: {id, v, seed, seats, turn, round, tt,
+ *     t, o, b, u, hp, res, out, nid, phase, win, why, at, endsAt, last}. `seed` grows the same
+ *     island on every screen; `o` (owner) and `b` (building) are one letter per tile; `u` lists
+ *     the units [id, seat, kind, tile, hp, moves left, can attack]. Only the HOST writes it and
+ *     `v` goes up on every write.
+ *   - The HOST is the lowest sessionId among live players (heartbeat seen in the last 3s),
+ *     worked out every frame. It checks every action with the RULES, plays the bot empires one
+ *     action at a time, ends a turn when its timer runs out and decides the winner. A new host
+ *     carries on from `game`: same island, same turn, same timer.
+ *   - Each player writes its OWN entity: `n` (name), `c` (color), `hb` (heartbeat).
+ *   - Players send intents to the host: "act" {g, tt, a} where a = {k: "claim"|"farm"|"tower"|
+ *     "train"|"move"|"attack"|"end", ...} and `tt` counts turns, so an action sent in the
+ *     previous turn is ignored; "again" {g} after a match. The host applies its own directly.
+ *   - Everyone animates from `last` (the latest action: who walked where, who hit whom).
+ *   - Players take empires as they arrive; anyone past four watches. An empire whose player is
+ *     silent for 12s goes to a bot; a waiting player takes over a bot's empire, even mid-match.
+ *   - ?attract plays offline, four bots, starting a few rounds in (the preview is recorded from it).
+ *   - Leaderboard "wins": +1 for each match a player wins, shown on the results card.
+ */
+import * as THREE from "three";
+
+// ── CONFIG ──────────────────────────────────────────────────────────────────────────
+const CONFIG = {
+  radius: 5,               // island size in hexes from the centre to the open sea (5 = 91 hexes)
+  rounds: 16,              // after this many rounds the biggest empire wins (about 15 minutes)
+  turnMs: 45000,           // a player's turn ends by itself after this long
+  botStepMs: 450,          // a bot waits this long between actions, so you can follow it
+  stepMs: 170,             // a unit takes this long to walk one hex
+  start: [4, 3, 2],        // food, wood, stone each empire starts with
+  castleYield: [2, 1, 1],  // a castle makes this every turn, on top of its land
+  farmFood: 2,             // extra food from a farm (its grass makes 1 as well)
+  // [food, wood, stone]
+  cost: { claim: [2, 0, 0], farm: [0, 2, 0], tower: [0, 2, 3], soldier: [3, 1, 0], catapult: [1, 2, 2] },
+  // atk = damage per attack; siege = extra damage against towers and castles
+  units: [
+    { name: "Soldier", hp: 3, atk: 3, move: 2, range: 1, siege: 0 },
+    { name: "Catapult", hp: 2, atk: 1, move: 1, range: 2, siege: 3 },
+  ],
+  maxUnits: 6,             // units per empire
+  castleHp: 6, towerHp: 4,
+  castleHeal: 1,           // a damaged castle mends this much each turn
+  guardShot: 1,            // towers and castles hit each enemy unit next to them this hard, every turn
+  seatGraceMs: 12000,      // a player silent this long hands the empire to a bot
+  resultsMs: 40000,        // results show this long, then a new match starts
+  board: "wins",           // leaderboard name
+  seatColors: ["#e5484d", "#3a86ff", "#f5b82e", "#a061e8"],
+  seatNames: ["Red", "Blue", "Gold", "Violet"],
+  botNames: ["Queen Ruby", "King Azure", "Duke Amber", "Lady Iris"],
+  sea: "#1d5f8f", sky: "#173450",
+};
+const COLORS = ["#ff6b6b", "#4dabf7", "#ffd43b", "#69db7c", "#b197fc", "#ff922b", "#f783ac", "#3bc9db"];
+const NAME_A = ["Bold", "Wise", "Brave", "Clever", "Grand", "Lucky"], NAME_B = ["Builder", "Ruler", "Settler", "Baron", "Chief", "Mayor"];
+const SEAT_PICK = [0, 2, 1, 3]; // the second player starts across the island from the first
+const ICON = ["🌾", "🪵", "🪨"];
+
+// ── CONNECTION ──────────────────────────────────────────────────────────────────────
+// The builder fills these in for this game. Downloaded from GitHub? Put your own pk_ key here.
+const MP_CONNECT = {
+  key: 'pk_REPLACE_ME',
+  room: 'hex-empires',
+  endpoint: 'wss://live.multiplayeragent.com',
+  apiUrl: 'https://api.multiplayeragent.com',
+};
+const ATTRACT = new URLSearchParams(location.search).has("attract");
+
+/** Same shape as the SDK client, kept in this tab: offline play and ?attract. */
+function localRoom() {
+  const id = "local", state = { entities: { players: { [id]: {} } }, shared: {} }, subs = [];
+  let queued = false;
+  const emit = () => { if (!queued) { queued = true; queueMicrotask(() => { queued = false; subs.forEach((f) => f(state)); }); } };
+  const put = (o, k, v) => { if (typeof k === "object") Object.assign(o, k); else o[k] = v; emit(); };
+  return {
+    sessionId: id, state, offline: true,
+    me: { set: (k, v) => put(state.entities.players[id], k, v) },
+    setShared: (k, v) => put(state.shared, k, v),
+    onState: (f) => { subs.push(f); f(state); }, onJoin() {}, onLeave() {}, on() {}, send() {},
+    onDisconnect() {}, onReconnect() {}, leave: async () => {},
+  };
+}
+async function connect() {
+  if (ATTRACT || typeof MP === "undefined") return localRoom();
+  try {
+    const mp = await Promise.race([MP.join({ ...MP_CONNECT }), new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 10000))]);
+    window.mp = mp; // the builder calls window.mp.leave() when the page closes
+    return mp;
+  } catch (e) {
+    console.warn("Playing offline:", e && e.message);
+    return localRoom();
+  }
+}
+const parse = (v, fb) => { if (typeof v !== "string") return fb; try { return JSON.parse(v); } catch { return fb; } };
+let net = null, S = { entities: { players: {} }, shared: {} };
+const seenHb = new Map(); // sessionId -> { hb, at } on OUR clock
+/** Players whose heartbeat moved in the last 3s (plus us), sorted by sessionId. */
+function livePlayers() {
+  const now = performance.now(), out = [];
+  for (const [id, p] of Object.entries(S.entities.players || {})) {
+    const s = seenHb.get(id);
+    if (!s || s.hb !== p.hb) seenHb.set(id, { hb: p.hb, at: now });
+    if (id === net.sessionId || now - seenHb.get(id).at < 3000) out.push(id);
+  }
+  return out.sort();
+}
+const isHost = () => livePlayers()[0] === net.sessionId;
+/** Still in the room and heard from within the seat grace time (a backgrounded phone keeps its seat). */
+const stillHere = (id) => id === net.sessionId || (!!S.entities.players[id] && performance.now() - (seenHb.get(id)?.at ?? -1e9) < CONFIG.seatGraceMs);
+
+// ── MAP ─────────────────────────────────────────────────────────────────────────────
+// Pointy-top hexes in axial coordinates (q, r). World: x = √3·(q + r/2), z = 1.5·r, one unit = hex radius.
+const R = CONFIG.radius, SQ3 = Math.sqrt(3);
+const TILES = [];
+for (let q = -R; q <= R; q++) for (let r = Math.max(-R, -q - R); r <= Math.min(R, -q + R); r++) TILES.push({ q, r, x: SQ3 * (q + r / 2), z: 1.5 * r });
+const INDEX = new Map(TILES.map((t, i) => [t.q + "," + t.r, i]));
+const tileAt = (q, r) => INDEX.get(q + "," + r) ?? -1;
+const DIRS = [[0, 1], [1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1]]; // edge i of a hex faces DIRS[i]
+const NEIGH = TILES.map((t) => DIRS.map(([dq, dr]) => tileAt(t.q + dq, t.r + dr)));
+const hexDist = (a, b) => { const A = TILES[a], B = TILES[b]; return (Math.abs(A.q - B.q) + Math.abs(A.r - B.r) + Math.abs(A.q + A.r - B.q - B.r)) / 2; };
+const CENTER = tileAt(0, 0);
+const TERRAIN = {
+  g: { name: "Grass", color: "#88c95a", h: 0.3, yield: [1, 0, 0] },
+  f: { name: "Forest", color: "#4f9548", h: 0.34, yield: [0, 1, 0] },
+  h: { name: "Hills", color: "#c4a676", h: 0.5, yield: [0, 0, 1] },
+  m: { name: "Mountain", color: "#8e909c", h: 0.62, yield: [0, 0, 0] },
+  w: { name: "Sea", color: CONFIG.sea, h: 0, yield: [0, 0, 0] },
+};
+const walkable = (t) => t === "g" || t === "f" || t === "h";
+function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const maps = new Map();
+/** The island for a seed: terrain letter per tile, the four castle tiles, a little jitter for looks. Same seed, same island, everywhere. */
+function mapOf(seed) {
+  if (maps.has(seed)) return maps.get(seed);
+  const rnd = mulberry32(seed), n = TILES.length;
+  const smooth = (a) => a.map((v, i) => { const nb = NEIGH[i].filter((j) => j >= 0); return (v + nb.reduce((s, j) => s + a[j], 0)) / (nb.length + 1); });
+  const hgt = smooth(smooth(TILES.map(() => rnd()))), wet = smooth(smooth(TILES.map(() => rnd()))), coast = smooth(TILES.map(() => rnd()));
+  const terr = TILES.map((_, i) => (hexDist(i, CENTER) <= R - 0.6 + (coast[i] - 0.5) * 3.2 ? "g" : "w"));
+  const land = TILES.map((_, i) => i).filter((i) => terr[i] !== "w");
+  const byH = land.slice().sort((a, b) => hgt[b] - hgt[a]);
+  byH.slice(0, Math.round(land.length * 0.06)).forEach((i) => (terr[i] = "m"));
+  byH.slice(Math.round(land.length * 0.06), Math.round(land.length * 0.27)).forEach((i) => (terr[i] = "h"));
+  land.filter((i) => terr[i] === "g").sort((a, b) => wet[b] - wet[a]).slice(0, Math.round(land.length * 0.3)).forEach((i) => (terr[i] = "f"));
+  // Castles near the four diagonal corners, each with grass, a forest and a hill next door.
+  const caps = [-135, -45, 45, 135].map((deg) => {
+    const a = (deg * Math.PI) / 180, px = Math.cos(a) * (R - 1.6) * SQ3, pz = Math.sin(a) * (R - 1.6) * SQ3;
+    let best = 0, bd = Infinity;
+    TILES.forEach((t, i) => { const d = Math.hypot(t.x - px, t.z - pz); if (d < bd && hexDist(i, CENTER) <= R - 1) { bd = d; best = i; } });
+    return best;
+  });
+  for (const c of caps) {
+    terr[c] = "g";
+    NEIGH[c].forEach((j, k) => { if (j >= 0) terr[j] = k === 0 ? "f" : k === 3 ? "h" : terr[j] === "w" || terr[j] === "m" ? "g" : terr[j]; });
+  }
+  const m = { terr, caps, jit: TILES.map(() => rnd()) };
+  maps.set(seed, m);
+  return m;
+}
+const CH = "abcd"; // the owner letters in `o`: seat 0 = "a" ... "-" = nobody
+const ownerOf = (x, i) => CH.indexOf(x.o[i]);
+const unitOn = (x, t) => x.u.find((u) => u[3] === t);
+const myUnits = (x, s) => x.u.filter((u) => u[1] === s);
+const afford = (res, c) => res[0] >= c[0] && res[1] >= c[1] && res[2] >= c[2];
+const isGuard = (b) => b === "t" || b === "c"; // towers and castles: they shoot, they can't be walked into by enemies
+
+// ── RULES ───────────────────────────────────────────────────────────────────────────
+/** A copy of the game we can change: tiles as arrays, units and resources copied. */
+function editable(g) { return { ...g, o: g.o.split(""), b: g.b.split(""), u: g.u.map((u) => u.slice()), res: g.res.map((r) => r.slice()), hp: { ...g.hp }, out: g.out.slice() }; }
+const packed = (x) => ({ ...x, o: x.o.join(""), b: x.b.join("") });
+/** Read-only tile arrays for a game (cached per game object). */
+const views = new WeakMap();
+function look(g) { let x = views.get(g); if (!x) { x = { ...g, o: g.o.split(""), b: g.b.split("") }; views.set(g, x); } return x; }
+
+const canClaim = (x, s, t) => t >= 0 && walkable(mapOf(x.seed).terr[t]) && x.o[t] === "-" && NEIGH[t].some((j) => j >= 0 && ownerOf(x, j) === s);
+/** Where a unit can walk this turn: tile -> path. Not through units, the sea, mountains, or enemy towers and castles. */
+function reachable(x, u) {
+  const out = new Map(), terr = mapOf(x.seed).terr;
+  let front = [[u[3], []]];
+  const seen = new Set([u[3]]);
+  for (let step = 0; step < u[5]; step++) {
+    const next = [];
+    for (const [t, path] of front) for (const j of NEIGH[t]) {
+      if (j < 0 || seen.has(j) || !walkable(terr[j]) || unitOn(x, j)) continue;
+      const own = ownerOf(x, j);
+      if (own >= 0 && own !== u[1] && isGuard(x.b[j])) continue;
+      seen.add(j); const p = [...path, j]; out.set(j, p); next.push([j, p]);
+    }
+    front = next;
+  }
+  return out;
+}
+/** What a unit can hit right now: tiles in range with an enemy unit, tower or castle. */
+function targetsOf(x, u) {
+  if (!u[6]) return [];
+  const out = [], range = CONFIG.units[u[2]].range;
+  for (let t = 0; t < TILES.length; t++) {
+    const d = hexDist(u[3], t);
+    if (d < 1 || d > range) continue;
+    const e = unitOn(x, t), own = ownerOf(x, t);
+    if ((e && e[1] !== u[1]) || (own >= 0 && own !== u[1] && isGuard(x.b[t]))) out.push(t);
+  }
+  return out;
+}
+const score = (x, s) => x.o.reduce((n, c, i) => n + (c === CH[s] ? 1 + (x.b[i] === "c" ? 5 : x.b[i] !== "-" ? 2 : 0) : 0), 0) + myUnits(x, s).length;
+/** The resources seat s makes each turn. */
+function income(x, s) {
+  const terr = mapOf(x.seed).terr, inc = [0, 0, 0];
+  x.o.forEach((c, i) => {
+    if (c !== CH[s]) return;
+    TERRAIN[terr[i]].yield.forEach((v, k) => (inc[k] += v));
+    if (x.b[i] === "f") inc[0] += CONFIG.farmFood;
+    if (x.b[i] === "c") CONFIG.castleYield.forEach((v, k) => (inc[k] += v));
+  });
+  return inc;
+}
+/** A castle fell: its empire is out, and all its land (farms and towers too) goes to the winner. */
+function fall(x, loser, winner, t) {
+  x.b[t] = "-"; delete x.hp[t];
+  x.o = x.o.map((c) => (c === CH[loser] ? CH[winner] : c));
+  x.u = x.u.filter((u) => u[1] !== loser);
+  x.res[loser] = [0, 0, 0]; x.out[loser] = 1;
+}
+function finish(x, win, why) { Object.assign(x, { phase: "over", win, why, endsAt: Date.now() + CONFIG.resultsMs }); }
+/** Begin seat s's turn: income, fresh units, towers and castles shoot their neighbours, castles mend. */
+function startTurn(x, s) {
+  const inc = income(x, s), shots = [];
+  x.turn = s; x.tt++; x.acts = 0;
+  x.res[s] = x.res[s].map((v, k) => Math.min(99, v + inc[k]));
+  for (const u of x.u) if (u[1] === s) { u[5] = CONFIG.units[u[2]].move; u[6] = 1; }
+  x.b.forEach((b, t) => {
+    if (!isGuard(b) || ownerOf(x, t) !== s) return;
+    for (const j of NEIGH[t]) { const e = j >= 0 && unitOn(x, j); if (e && e[1] !== s) { e[4] -= CONFIG.guardShot; shots.push([t, j, e[4] <= 0 ? 1 : 0]); } }
+    if (b === "c" && x.hp[t]) { x.hp[t] = Math.min(CONFIG.castleHp, x.hp[t] + CONFIG.castleHeal); if (x.hp[t] >= CONFIG.castleHp) delete x.hp[t]; }
+  });
+  x.u = x.u.filter((u) => u[4] > 0);
+  const now = Date.now();
+  x.endsAt = now + CONFIG.turnMs; x.at = now + (shots.length ? 700 : 300);
+  x.last = { n: x.last.n + 1, k: "turn", s, shots, inc };
+}
+function endTurn(x) {
+  let next = x.turn;
+  for (let k = 1; k <= 4; k++) { const n = (x.turn + k) % 4; if (!x.out[n]) { next = n; break; } }
+  if (next <= x.turn) x.round++;
+  if (x.round > CONFIG.rounds) {
+    const best = [0, 1, 2, 3].filter((s) => !x.out[s]).sort((a, b) => score(x, b) - score(x, a))[0];
+    finish(x, best, `The biggest empire after ${CONFIG.rounds} rounds`);
+    x.last = { n: x.last.n + 1, k: "end", s: x.turn };
+    return;
+  }
+  startTurn(x, next);
+}
+/** Try one action for the seat whose turn it is. Returns the new game, or null if it isn't allowed. */
+function applyAction(g, a) {
+  if (!g || g.phase !== "play" || !a || typeof a.k !== "string") return null;
+  const x = editable(g), s = g.turn, me = CH[s], res = x.res[s], terr = mapOf(g.seed).terr;
+  const t = Number.isInteger(a.tile) && a.tile >= 0 && a.tile < TILES.length ? a.tile : -1;
+  const pay = (c) => { if (!afford(res, c)) return false; for (let k = 0; k < 3; k++) res[k] -= c[k]; return true; };
+  let last = null, busyMs = 0;
+  if (a.k === "end") { endTurn(x); return packed({ ...x, t: g.t + 1 }); }
+  if (a.k === "claim") {
+    if (!canClaim(x, s, t) || !pay(CONFIG.cost.claim)) return null;
+    x.o[t] = me; last = { k: "claim", tile: t };
+  } else if (a.k === "farm") {
+    if (t < 0 || x.o[t] !== me || x.b[t] !== "-" || terr[t] !== "g" || !pay(CONFIG.cost.farm)) return null;
+    x.b[t] = "f"; last = { k: "farm", tile: t };
+  } else if (a.k === "tower") {
+    if (t < 0 || x.o[t] !== me || x.b[t] !== "-" || !pay(CONFIG.cost.tower)) return null;
+    x.b[t] = "t"; last = { k: "tower", tile: t };
+  } else if (a.k === "train") {
+    const kind = a.kind === 1 ? 1 : 0;
+    if (t < 0 || x.o[t] !== me || x.b[t] !== "c" || unitOn(x, t) || myUnits(x, s).length >= CONFIG.maxUnits || !pay(kind ? CONFIG.cost.catapult : CONFIG.cost.soldier)) return null;
+    x.u.push([x.nid++, s, kind, t, CONFIG.units[kind].hp, 0, 0]); // ready next turn
+    last = { k: "train", tile: t, id: x.nid - 1 };
+  } else if (a.k === "move") {
+    const u = x.u.find((v) => v[0] === a.id);
+    const path = u && u[1] === s && u[5] > 0 ? reachable(x, u).get(t) : null;
+    if (!path) return null;
+    u[3] = t; u[5] -= path.length;
+    if (u[2] === 1) u[6] = 0; // a catapult that moves can't shoot this turn
+    const own = ownerOf(x, t);
+    const took = u[2] === 0 && own >= 0 && own !== s; // soldiers take enemy land (and farms) they stand on
+    if (took) x.o[t] = me;
+    last = { k: "move", id: u[0], path, took: took ? own : -1 };
+    busyMs = path.length * CONFIG.stepMs;
+  } else if (a.k === "attack") {
+    const u = x.u.find((v) => v[0] === a.id);
+    if (!u || u[1] !== s || !targetsOf(x, u).includes(t)) return null;
+    const K = CONFIG.units[u[2]], e = unitOn(x, t);
+    last = { k: "attack", id: u[0], from: u[3], tile: t, d: 0, kill: 0, back: 0, fell: -1 };
+    if (e && e[1] !== s) {
+      const d = isGuard(x.b[t]) && ownerOf(x, t) === e[1] ? Math.max(1, K.atk - 1) : K.atk; // a unit inside its own tower or castle takes 1 less
+      e[4] -= d; last.d = d;
+      if (e[4] <= 0) { x.u = x.u.filter((v) => v !== e); last.kill = 1; }
+      else if (e[2] === 0 && hexDist(u[3], t) === 1) { u[4] -= 1; last.back = 1; if (u[4] <= 0) x.u = x.u.filter((v) => v !== u); } // soldiers hit back
+    } else {
+      const loser = ownerOf(x, t), d = K.atk + K.siege, hp = (x.hp[t] ?? (x.b[t] === "c" ? CONFIG.castleHp : CONFIG.towerHp)) - d;
+      last.d = d;
+      if (hp > 0) x.hp[t] = hp;
+      else if (x.b[t] === "t") { x.b[t] = "-"; delete x.hp[t]; last.kill = 1; }
+      else { fall(x, loser, s, t); last.kill = 1; last.fell = loser; }
+    }
+    u[5] = 0; u[6] = 0;
+    busyMs = 450;
+  } else return null;
+  x.t = g.t + 1; x.acts = (g.acts || 0) + 1; x.at = Date.now() + busyMs;
+  x.last = { n: g.last.n + 1, s, ...last };
+  const alive = [0, 1, 2, 3].filter((k) => !x.out[k]);
+  if (alive.length === 1) finish(x, alive[0], "Took every other castle");
+  return packed(x);
+}
+
+// ── BOT ─────────────────────────────────────────────────────────────────────────────
+/** The bot's next action: hit something, train, march on the nearest castle, build, claim land, or end the turn. */
+function botAction(g) {
+  const s = g.turn, x = look(g), terr = mapOf(g.seed).terr, res = g.res[s], cap = g.b.indexOf("c") >= 0 ? x.b.findIndex((b, i) => b === "c" && ownerOf(x, i) === s) : -1;
+  if ((g.acts || 0) > 24 || cap < 0) return { k: "end" };
+  const units = myUnits(x, s), enemyUnits = x.u.filter((u) => u[1] !== s);
+  // 1. Attack: finish off what we can, castles and towers next, anything else after.
+  let best = null;
+  for (const u of units) for (const t of targetsOf(x, u)) {
+    const e = unitOn(x, t), K = CONFIG.units[u[2]];
+    if (u[2] === 1 && e && e[4] > K.atk) continue; // catapults save their shots for walls (or a sure kill)
+    const v = e ? (e[4] <= K.atk ? 30 : 12) + (e[2] === 1 ? 6 : 0) : (x.b[t] === "c" ? 24 : 16) + (u[2] === 1 ? 20 : 0); // catapults go for walls
+    if (!best || v > best.v) best = { v, a: { k: "attack", id: u[0], tile: t } };
+  }
+  if (best) return best.a;
+  // 2. Train: an army that grows with the rounds, catapults once there's stone to spare.
+  const spots = unitOn(x, cap) ? [] : [cap];
+  const threat = enemyUnits.some((e) => hexDist(e[3], cap) <= 3);
+  if (spots.length && units.length < CONFIG.maxUnits && (threat || units.length < 2 + g.round / 2)) {
+    const cats = units.filter((u) => u[2] === 1).length;
+    const kind = g.round >= 3 && cats < 2 && afford(res, CONFIG.cost.catapult) && !threat ? 1 : afford(res, CONFIG.cost.soldier) ? 0 : -1;
+    if (kind >= 0) return { k: "train", tile: cap, kind };
+  }
+  // 3. March: a guard stays home to chase raiders; the rest of the army heads for the castle of the next
+  //    empire clockwise round the island (so armies take different roads instead of all meeting in the middle).
+  const rival = [1, 2, 3].map((k) => (s + k) % 4).find((k) => !g.out[k]);
+  const prey = x.b.findIndex((b, i) => b === "c" && ownerOf(x, i) === rival);
+  const raiders = enemyUnits.filter((e) => hexDist(e[3], cap) <= 3);
+  const home = units.filter((u) => u[2] === 0).sort((a, b) => hexDist(a[3], cap) - hexDist(b[3], cap)).slice(0, raiders.length ? 2 : 1); // the guard
+  for (const u of units) {
+    if (u[5] <= 0 || (u[2] === 1 && targetsOf(x, u).some((t) => !unitOn(x, t)))) continue;
+    const guard = home.includes(u), near = raiders.sort((a, b) => hexDist(a[3], u[3]) - hexDist(b[3], u[3]))[0];
+    if (u[3] === cap && !near) { // step off the castle so the next unit can be trained there
+      const out = [...reachable(x, u).keys()].filter((t) => hexDist(t, cap) === 1).sort((a, b) => hexDist(a, prey) - hexDist(b, prey))[0];
+      if (out !== undefined) return { k: "move", id: u[0], tile: out };
+    }
+    const wave = units.length - home.length >= 3 || g.round >= 12; // the army gathers near home, then marches together
+    const goal = guard ? (near ? near[3] : -1) : wave ? prey : hexDist(u[3], cap) > 2 ? cap : -1;
+    if (goal === undefined || goal < 0) continue;
+    // soldiers close in (grabbing enemy land on the way); catapults stop two hexes off, out of reach of the walls
+    const want = (t) => (u[2] === 1 ? Math.abs(hexDist(t, goal) - 2) : hexDist(t, goal) - (ownerOf(x, t) >= 0 && ownerOf(x, t) !== s ? 0.4 : 0));
+    let pick = -1, bd = want(u[3]) - 0.3;
+    for (const [t] of reachable(x, u)) { const d = want(t); if (d < bd) { bd = d; pick = t; } }
+    if (pick >= 0) return { k: "move", id: u[0], tile: pick };
+  }
+  // 4. Build: farms on home grass, a tower on a border that faces an enemy.
+  const mine = x.o.map((c, i) => i).filter((i) => ownerOf(x, i) === s);
+  const farms = mine.filter((i) => x.b[i] === "f").length, towers = mine.filter((i) => x.b[i] === "t").length;
+  if (afford(res, CONFIG.cost.farm) && farms < 1 + mine.length / 5 && res[1] >= (afford(res, CONFIG.cost.soldier) ? 2 : 3)) {
+    const t = mine.filter((i) => x.b[i] === "-" && terr[i] === "g" && !unitOn(x, i)).sort((a, b) => hexDist(a, cap) - hexDist(b, cap))[0];
+    if (t !== undefined) return { k: "farm", tile: t };
+  }
+  if (afford(res, CONFIG.cost.tower) && towers < 1 && threat) {
+    const t = mine.filter((i) => x.b[i] === "-" && NEIGH[i].some((j) => j >= 0 && ownerOf(x, j) >= 0 && ownerOf(x, j) !== s)).sort((a, b) => hexDist(a, cap) - hexDist(b, cap))[0];
+    if (t !== undefined) return { k: "tower", tile: t };
+  }
+  // 5. Claim: land next to ours, the resource we make least of first; keep food for a soldier when we have few.
+  const keep = units.length < 2 ? CONFIG.cost.soldier[0] : 0;
+  if (res[0] >= CONFIG.cost.claim[0] + keep) {
+    const inc = income(x, s), want = inc.indexOf(Math.min(...inc));
+    const opts = x.o.map((c, i) => i).filter((i) => canClaim(x, s, i));
+    const v = (i) => (TERRAIN[terr[i]].yield[want] ? 3 : 0) + NEIGH[i].filter((j) => j >= 0 && ownerOf(x, j) === s).length * 0.5 + mapOf(g.seed).jit[i];
+    const t = opts.sort((a, b) => v(b) - v(a))[0];
+    if (t !== undefined) return { k: "claim", tile: t };
+  }
+  return { k: "end" };
+}
+
+// ── GAME (HOST) ─────────────────────────────────────────────────────────────────────
+const host = { last: null };
+const gameMemo = { raw: undefined, g: null };
+/** The game as state has it, or the host's own newer write that hasn't come back yet. */
+function game() {
+  if (gameMemo.raw !== S.shared.game) { gameMemo.raw = S.shared.game; gameMemo.g = parse(S.shared.game, null); }
+  const g = gameMemo.g;
+  return host.last && isHost() && (!g || host.last.v > g.v) ? host.last : g;
+}
+function writeGame(g) { g = { ...g, v: (game()?.v ?? 0) + 1 }; host.last = g; net.setShared("game", JSON.stringify(g)); return g; }
+/** A new island: every empire starts with its castle, the six hexes round it and one soldier. */
+function freshGame(id, seats, seed = (Math.random() * 1e9) | 0) {
+  const map = mapOf(seed), o = Array(TILES.length).fill("-"), b = Array(TILES.length).fill("-"), u = [];
+  map.caps.forEach((c, s) => {
+    b[c] = "c"; o[c] = CH[s];
+    for (const j of NEIGH[c]) if (j >= 0 && walkable(map.terr[j])) o[j] = CH[s];
+    u.push([s + 1, s, 0, NEIGH[c][1], CONFIG.units[0].hp, 0, 0]);
+  });
+  const x = { id, seed, seats, turn: 3, round: 1, tt: 0, t: 0, acts: 0, o, b, u, hp: {}, nid: 5, res: seats.map(() => CONFIG.start.slice()), out: [0, 0, 0, 0],
+    phase: "play", win: -1, why: "", at: 0, endsAt: 0, last: { n: 0 } };
+  startTurn(x, 0);
+  x.at = Date.now() + 1200;
+  return packed(x);
+}
+/** ?attract: the same island every time, played a few rounds in so the video shows armies meeting. */
+function attractGame() {
+  let g = freshGame(1, ["bot", "bot", "bot", "bot"], 20261109);
+  for (let i = 0; i < 3000 && g.round < 7 && g.phase === "play"; i++) g = applyAction(g, botAction(g)) || applyAction(g, { k: "end" });
+  return { ...g, at: Date.now() + 300, last: { n: g.last.n + 1, k: "turn", s: g.turn, shots: [], inc: [0, 0, 0] } };
+}
+/** Gone players lose their empire to a bot; waiting players take a bot's empire (even mid-match). */
+function fixSeats(g) {
+  if (ATTRACT) return g;
+  const seats = g.seats.slice(), waiting = livePlayers().filter((id) => !seats.includes(id));
+  for (let s = 0; s < 4; s++) if (seats[s] !== "bot" && !stillHere(seats[s])) seats[s] = "bot";
+  for (const s of SEAT_PICK) if (seats[s] === "bot" && !g.out[s] && waiting.length) seats[s] = waiting.shift();
+  if (seats.every((x, s) => x === g.seats[s])) return g;
+  const out = { ...g, seats };
+  if (seats[g.turn] !== g.seats[g.turn]) out.endsAt = Date.now() + CONFIG.turnMs; // a full turn for the newcomer
+  return writeGame(out);
+}
+/** An "act" intent (or my own action when I'm the host): only from the seat whose turn it is, this turn. */
+function hostAct(from, m) {
+  const g = game();
+  if (!g || !m || m.g !== g.id || m.tt !== g.tt || g.seats[g.turn] !== from) return;
+  const n = applyAction(g, m.a);
+  if (n) writeGame(n);
+}
+function hostAgain(from, m) {
+  const g = game();
+  if (g && g.phase === "over" && m.g === g.id && g.seats.includes(from)) writeGame(freshGame(g.id + 1, g.seats));
+}
+function hostTick() {
+  let g = game();
+  if (!g) g = writeGame(ATTRACT ? attractGame() : freshGame(1, ["bot", "bot", "bot", "bot"]));
+  g = fixSeats(g);
+  const now = Date.now();
+  if (g.phase === "over") { if (now > g.endsAt) writeGame(freshGame(g.id + 1, g.seats)); return; }
+  if (g.seats[g.turn] === "bot") { if (now > g.at + CONFIG.botStepMs) writeGame(applyAction(g, botAction(g)) || applyAction(g, { k: "end" })); }
+  else if (now > g.endsAt) writeGame(applyAction(g, { k: "end" }));
+}
+
+// ── SCENE ───────────────────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(CONFIG.sky);
+scene.fog = new THREE.Fog(CONFIG.sky, 40, 90);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 300);
+function fit() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener("resize", fit); addEventListener("orientationchange", fit); fit();
+scene.add(new THREE.HemisphereLight("#e4f0ff", "#3c4a3a", 1.25));
+const sun = new THREE.DirectionalLight("#fff3dc", 2.3);
+sun.position.set(-9, 18, 7); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0006;
+Object.assign(sun.shadow.camera, { left: -13, right: 13, top: 13, bottom: -13, near: 2, far: 50 });
+scene.add(sun);
+function canvasTex(w, h, paint) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h; paint(c.getContext("2d"), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const mats = new Map();
+const mat = (color, glow = 0) => { const k = color + glow; if (!mats.has(k)) mats.set(k, new THREE.MeshStandardMaterial({ color, roughness: 0.7, flatShading: true, emissive: glow ? color : "#000", emissiveIntensity: glow })); return mats.get(k); };
+function mesh(geo, material, x, y, z, parent) { const m = new THREE.Mesh(geo, material); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; }
+// The sea: shallows round the island fading into deep water.
+const seaTex = canvasTex(512, 512, (c, w) => { const g = c.createRadialGradient(w / 2, w / 2, 40, w / 2, w / 2, w / 2); g.addColorStop(0, "#3fa3c9"); g.addColorStop(0.32, "#2b84b4"); g.addColorStop(0.6, CONFIG.sea); g.addColorStop(1, CONFIG.sky); c.fillStyle = g; c.fillRect(0, 0, w, w); });
+const sea = new THREE.Mesh(new THREE.CircleGeometry(60, 64), new THREE.MeshStandardMaterial({ map: seaTex, roughness: 0.35, metalness: 0.1 }));
+sea.rotation.x = -Math.PI / 2; sea.position.y = 0.02; sea.receiveShadow = true; scene.add(sea);
+const HEX_UP = Math.PI / 2; // CircleGeometry/RingGeometry start angle that lines a flat hexagon up with the tiles
+const G = {
+  tile: new THREE.CylinderGeometry(0.94, 0.97, 1, 6).translate(0, 0.5, 0), sand: new THREE.CylinderGeometry(1.02, 1.08, 0.2, 6).translate(0, 0.1, 0),
+  tree: new THREE.ConeGeometry(0.2, 0.55, 6).translate(0, 0.27, 0), rock: new THREE.DodecahedronGeometry(0.16), peak: new THREE.ConeGeometry(0.7, 1.0, 6).translate(0, 0.5, 0),
+  snow: new THREE.ConeGeometry(0.29, 0.42, 6).translate(0, 0.79, 0), tint: new THREE.CircleGeometry(0.9, 6, HEX_UP).rotateX(-Math.PI / 2),
+  edge: new THREE.BoxGeometry(0.9, 0.06, 0.1), ring: new THREE.RingGeometry(0.66, 0.86, 6, 1, HEX_UP).rotateX(-Math.PI / 2),
+};
+const terrainGroup = new THREE.Group(); scene.add(terrainGroup);
+const topOf = (seed, i) => TERRAIN[mapOf(seed).terr[i]].h + 0.12;
+const tilePos = (seed, i, v = new THREE.Vector3()) => v.set(TILES[i].x, topOf(seed, i), TILES[i].z);
+/** Build the island for a seed: sand under every land hex, the hexes, trees, rocks and peaks (all instanced). */
+function buildTerrain(seed) {
+  for (const c of [...terrainGroup.children]) { terrainGroup.remove(c); c.dispose?.(); }
+  const map = mapOf(seed), land = TILES.map((_, i) => i).filter((i) => map.terr[i] !== "w");
+  const rnd = mulberry32(seed ^ 0x5eed), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), col = new THREE.Color();
+  const inst = (geo, material, n) => { const im = new THREE.InstancedMesh(geo, material, Math.max(1, n)); im.count = 0; im.castShadow = im.receiveShadow = true; terrainGroup.add(im); return im; };
+  const put = (im, x, y, z, sx, sy, sz, ry = 0, color) => { m4.compose(new THREE.Vector3(x, y, z), q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), new THREE.Vector3(sx, sy, sz)); im.setMatrixAt(im.count, m4); if (color) im.setColorAt(im.count, col.set(color)); im.count++; };
+  const sand = inst(G.sand, mat("#e2cf98"), land.length), tiles = inst(G.tile, new THREE.MeshStandardMaterial({ roughness: 0.85, flatShading: true }), land.length);
+  const trees = inst(G.tree, mat("#2f7a3a"), land.length * 4), rocks = inst(G.rock, mat("#9a948a"), land.length * 3), peaks = inst(G.peak, mat("#8a8c98"), land.length), snow = inst(G.snow, mat("#f4f6fb"), land.length);
+  for (const i of land) {
+    const t = TILES[i], tt = map.terr[i], T = TERRAIN[tt], h = T.h, j = map.jit[i];
+    put(sand, t.x, 0, t.z, 1, 1, 1);
+    put(tiles, t.x, 0.1, t.z, 1, h + 0.02, 1, 0, col.set(T.color).offsetHSL((j - 0.5) * 0.03, 0, (j - 0.5) * 0.06).getStyle());
+    if (tt === "f") for (let k = 0; k < 3; k++) { const a = rnd() * 6.28, d = 0.25 + rnd() * 0.35, s = 0.8 + rnd() * 0.5; put(trees, t.x + Math.cos(a) * d, h + 0.12, t.z + Math.sin(a) * d, s, s, s, rnd() * 6); }
+    if (tt === "h") for (let k = 0; k < 2; k++) { const a = rnd() * 6.28, d = 0.3 + rnd() * 0.3, s = 0.8 + rnd() * 0.8; put(rocks, t.x + Math.cos(a) * d, h + 0.14, t.z + Math.sin(a) * d, s, s * 0.7, s, rnd() * 6); }
+    if (tt === "m") { put(peaks, t.x, h + 0.1, t.z, 1, 1 + j * 0.5, 1, j * 3); put(snow, t.x, h + 0.1, t.z, 1, 1 + j * 0.5, 1, j * 3); }
+  }
+  for (const im of terrainGroup.children) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
+}
+
+// ── MODELS ──────────────────────────────────────────────────────────────────────────
+// Territory: a soft tint on each owned hex and a bright line on every edge where the owner changes.
+const tints = new THREE.InstancedMesh(G.tint, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.38, depthWrite: false }), TILES.length);
+const edges = new THREE.InstancedMesh(G.edge, new THREE.MeshStandardMaterial({ roughness: 0.5 }), TILES.length * 6);
+tints.count = edges.count = 0; tints.renderOrder = 1; scene.add(tints, edges);
+function paintTerritory(g) {
+  const x = look(g), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), col = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
+  tints.count = edges.count = 0;
+  x.o.forEach((c, i) => {
+    if (c === "-") return;
+    const s = CH.indexOf(c), t = TILES[i], y = topOf(g.seed, i);
+    m4.compose(new THREE.Vector3(t.x, y + 0.012, t.z), q.identity(), new THREE.Vector3(1, 1, 1)); tints.setMatrixAt(tints.count, m4); tints.setColorAt(tints.count++, col.set(CONFIG.seatColors[s]));
+    NEIGH[i].forEach((j, k) => {
+      if (j >= 0 && x.o[j] === c) return;
+      const a = (Math.PI / 6) + (k * Math.PI) / 3, d = 0.8; // edge k faces 30° + 60°·k (measured from +z toward +x)
+      m4.compose(new THREE.Vector3(t.x + Math.sin(a) * d, y + 0.04, t.z + Math.cos(a) * d), q.setFromAxisAngle(up, a), new THREE.Vector3(1, 1, 1));
+      edges.setMatrixAt(edges.count, m4); edges.setColorAt(edges.count++, col.set(CONFIG.seatColors[s]).offsetHSL(0, 0.1, 0.08));
+    });
+  });
+  for (const im of [tints, edges]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
+}
+const M = {
+  field: new THREE.BoxGeometry(0.62, 0.06, 0.13), barn: new THREE.BoxGeometry(0.3, 0.24, 0.26), roof: new THREE.ConeGeometry(0.24, 0.18, 4).rotateY(Math.PI / 4),
+  towerBody: new THREE.CylinderGeometry(0.26, 0.32, 0.8, 8), crenel: new THREE.BoxGeometry(0.1, 0.1, 0.1), towerRoof: new THREE.ConeGeometry(0.32, 0.38, 8),
+  keep: new THREE.BoxGeometry(0.5, 0.62, 0.5), wall: new THREE.BoxGeometry(1.05, 0.26, 1.05), turret: new THREE.CylinderGeometry(0.15, 0.17, 0.62, 8), turretRoof: new THREE.ConeGeometry(0.19, 0.26, 8),
+  keepRoof: new THREE.ConeGeometry(0.42, 0.42, 4).rotateY(Math.PI / 4), pole: new THREE.CylinderGeometry(0.02, 0.02, 0.5, 4), flag: new THREE.BoxGeometry(0.26, 0.15, 0.02),
+  body: new THREE.CylinderGeometry(0.13, 0.21, 0.4, 8), head: new THREE.SphereGeometry(0.12, 12, 8), helm: new THREE.SphereGeometry(0.13, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+  spear: new THREE.BoxGeometry(0.035, 0.75, 0.035), shield: new THREE.CylinderGeometry(0.14, 0.14, 0.04, 10).rotateZ(Math.PI / 2), base: new THREE.CylinderGeometry(0.3, 0.3, 0.05, 16),
+  cart: new THREE.BoxGeometry(0.5, 0.14, 0.34), wheel: new THREE.CylinderGeometry(0.11, 0.11, 0.06, 10).rotateX(Math.PI / 2), arm: new THREE.BoxGeometry(0.06, 0.06, 0.55), cup: new THREE.SphereGeometry(0.08, 8, 6),
+  pip: new THREE.BoxGeometry(0.11, 0.07, 0.11), bar: new THREE.PlaneGeometry(1, 0.11),
+};
+const skin = mat("#f1c9a0"), stone = mat("#b9b3a8"), stoneDark = mat("#8f897e"), wood = mat("#8a5a33"), straw = mat("#e9c75b");
+/** A building on a hex: a farm (fields and a barn), a tower, or a castle, roofed in the owner's color. */
+function makeBuilding(kind, s) {
+  const g = new THREE.Group(), col = mat(CONFIG.seatColors[s]);
+  if (kind === "f") {
+    for (let k = -1; k <= 1; k++) mesh(M.field, straw, 0.08, 0.03, k * 0.2 - 0.12, g);
+    mesh(M.barn, mat("#b2423a"), -0.36, 0.12, 0.3, g); mesh(M.roof, col, -0.36, 0.33, 0.3, g);
+  } else if (kind === "t") {
+    mesh(M.towerBody, stone, 0, 0.4, 0, g);
+    for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; mesh(M.crenel, stoneDark, Math.cos(a) * 0.24, 0.84, Math.sin(a) * 0.24, g); }
+    mesh(M.towerRoof, col, 0, 1.06, 0, g);
+  } else if (kind === "c") {
+    mesh(M.wall, stone, 0, 0.13, 0, g); mesh(M.keep, stoneDark, 0, 0.55, 0, g); mesh(M.keepRoof, col, 0, 1.07, 0, g);
+    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { mesh(M.turret, stone, dx * 0.45, 0.31, dz * 0.45, g); mesh(M.turretRoof, col, dx * 0.45, 0.75, dz * 0.45, g); }
+    mesh(M.pole, wood, 0, 1.45, 0, g); mesh(M.flag, col, 0.13, 1.6, 0, g);
+  }
+  const bar = new THREE.Group(), bg = new THREE.Mesh(M.bar, new THREE.MeshBasicMaterial({ color: "#1b2433", depthWrite: false })), fg = new THREE.Mesh(M.bar, new THREE.MeshBasicMaterial({ color: CONFIG.seatColors[s], depthWrite: false }));
+  bg.scale.set(1.05, 1.5, 1); fg.position.z = 0.01; bar.add(bg, fg); bar.position.y = kind === "c" ? 1.95 : 1.45; bar.visible = false; g.add(bar);
+  g.userData = { bar, fg };
+  return g;
+}
+/** A unit: a soldier (spear and shield) or a catapult, standing on a disc of the owner's color, with hit-point pips. */
+function makeUnit(kind, s) {
+  const g = new THREE.Group(), body = new THREE.Group(), col = mat(CONFIG.seatColors[s]), dark = mat(new THREE.Color(CONFIG.seatColors[s]).multiplyScalar(0.6).getStyle());
+  mesh(M.base, dark, 0, 0.025, 0, g);
+  if (kind === 0) {
+    mesh(M.body, col, 0, 0.25, 0, body); mesh(M.head, skin, 0, 0.56, 0, body); mesh(M.helm, stoneDark, 0, 0.58, 0, body);
+    mesh(M.spear, wood, 0.2, 0.42, 0.05, body).rotation.z = 0.12; mesh(M.shield, dark, -0.19, 0.3, 0.04, body);
+  } else {
+    mesh(M.cart, wood, 0, 0.17, 0, body);
+    for (const [dx, dz] of [[-0.17, -0.19], [0.17, -0.19], [-0.17, 0.19], [0.17, 0.19]]) mesh(M.wheel, mat("#5b3b22"), dx, 0.11, dz, body);
+    const arm = mesh(M.arm, wood, 0, 0.36, 0, body); arm.rotation.x = -0.7; mesh(M.cup, stoneDark, 0, 0.55, -0.2, body); mesh(M.flag, col, 0, 0.3, 0.19, body);
+  }
+  body.scale.setScalar(1.25); g.add(body);
+  const pips = new THREE.Group(); pips.position.y = 1.0; g.add(pips);
+  for (let k = 0; k < CONFIG.units[kind].hp; k++) mesh(M.pip, col, (k - (CONFIG.units[kind].hp - 1) / 2) * 0.15, 0, 0, pips);
+  g.userData = { body, pips };
+  return g;
+}
+// Particles (little cubes) and floating numbers.
+const PMAX = 400, parts = [], dummy = new THREE.Object3D(), pColor = new THREE.Color();
+const pMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial(), PMAX);
+pMesh.setColorAt(0, pColor.set("#fff")); pMesh.count = 0; pMesh.frustumCulled = false; scene.add(pMesh);
+function burst(at, color, n = 12, speed = 3, size = 0.12) {
+  for (let i = 0; i < n && parts.length < PMAX; i++) {
+    const a = Math.random() * Math.PI * 2, u = Math.random();
+    parts.push({ x: at.x, y: at.y + 0.3, z: at.z, vx: Math.cos(a) * speed * u, vy: speed * (0.6 + Math.random()), vz: Math.sin(a) * speed * u, life: 0, max: 0.5 + Math.random() * 0.4, size, color: new THREE.Color(color) });
+  }
+}
+function partsTick(dt) {
+  let n = 0;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i]; p.life += dt;
+    if (p.life >= p.max) { parts.splice(i, 1); continue; }
+    p.vy -= 10 * dt; p.x += p.vx * dt; p.y = Math.max(0.3, p.y + p.vy * dt); p.z += p.vz * dt;
+    dummy.position.set(p.x, p.y, p.z); dummy.scale.setScalar(p.size * (1 - p.life / p.max)); dummy.rotation.set(p.life * 6, p.life * 4, 0); dummy.updateMatrix();
+    pMesh.setMatrixAt(n, dummy.matrix); pMesh.setColorAt(n, p.color); n++;
+  }
+  pMesh.count = n; pMesh.instanceMatrix.needsUpdate = true; if (pMesh.instanceColor) pMesh.instanceColor.needsUpdate = true;
+}
+const pops = [];
+function pop(at, text, color = "#fff") {
+  if (pops.length > 20 || ATTRACT) return;
+  const el = document.createElement("div"); el.className = "pop"; el.textContent = text; el.style.color = color; document.body.appendChild(el);
+  pops.push({ el, p: at.clone().setY(at.y + 1.1), t: 0 });
+}
+function popsTick(dt) {
+  for (let i = pops.length - 1; i >= 0; i--) {
+    const o = pops[i]; o.t += dt;
+    if (o.t > 1.1) { o.el.remove(); pops.splice(i, 1); continue; }
+    const s = o.p.clone().project(camera);
+    o.el.style.transform = `translate(${((s.x + 1) * innerWidth) / 2 - 14}px, ${((1 - s.y) * innerHeight) / 2 - 20 - o.t * 40}px)`; o.el.style.opacity = String(Math.min(1, 2.2 - o.t * 2));
+  }
+}
+// Shots in flight: tower arrows and catapult stones.
+const shots = [], shotMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.09, 8, 6), mat("#3a3530"), 32);
+shotMesh.count = 0; shotMesh.frustumCulled = false; scene.add(shotMesh);
+function shoot(from, to, ms, arc, onHit) { shots.push({ a: from.clone().setY(from.y + 0.8), b: to.clone().setY(to.y + 0.4), t0: performance.now(), ms, arc, onHit }); }
+function shotsTick(now) {
+  let n = 0;
+  for (let i = shots.length - 1; i >= 0; i--) {
+    const s = shots[i], k = (now - s.t0) / s.ms;
+    if (k >= 1) { shots.splice(i, 1); s.onHit?.(); continue; }
+    if (k < 0) continue;
+    dummy.position.lerpVectors(s.a, s.b, k); dummy.position.y += Math.sin(k * Math.PI) * s.arc; dummy.scale.setScalar(1); dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
+    shotMesh.setMatrixAt(n++, dummy.matrix);
+  }
+  shotMesh.count = n; shotMesh.instanceMatrix.needsUpdate = true;
+}
+
+// ── VIEW ────────────────────────────────────────────────────────────────────────────
+const seen = { id: -1, seed: -1, n: -1, o: "", b: "", hp: "" };
+const buildings = new Map(); // tile -> { key, g, born }
+const unitViews = new Map(); // unit id -> { g, kind, s, tile, path, t0, lunge, dying }
+const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
+/** Make the scene match the game: island, territory, buildings and units, then play the newest action. */
+function syncWorld(g, now) {
+  if (seen.seed !== g.seed) { buildTerrain(g.seed); seen.seed = g.seed; }
+  if (seen.id !== g.id) {
+    for (const v of unitViews.values()) scene.remove(v.g);
+    for (const b of buildings.values()) scene.remove(b.g);
+    unitViews.clear(); buildings.clear(); Object.assign(seen, { id: g.id, n: g.last.n, o: "", b: "", hp: "" });
+  }
+  const x = look(g), hpKey = JSON.stringify(g.hp);
+  if (seen.o !== g.o) paintTerritory(g);
+  if (seen.o !== g.o || seen.b !== g.b || seen.hp !== hpKey) syncBuildings(g, x, now);
+  Object.assign(seen, { o: g.o, b: g.b, hp: hpKey });
+  const fresh = g.last.n !== seen.n;
+  syncUnits(g, now, fresh ? g.last : null);
+  if (fresh) { seen.n = g.last.n; playLast(g, now); }
+}
+function syncBuildings(g, x, now) {
+  const want = new Set();
+  x.b.forEach((b, i) => {
+    if (b === "-") return;
+    want.add(i);
+    const s = ownerOf(x, i), key = b + s;
+    let v = buildings.get(i);
+    if (!v || v.key !== key) {
+      if (v) scene.remove(v.g);
+      const m = makeBuilding(b, s); m.position.copy(tilePos(g.seed, i)); m.rotation.y = mapOf(g.seed).jit[i] * 6;
+      if (seen.b) { m.scale.setScalar(0.01); } scene.add(m);
+      v = { key, g: m, born: now }; buildings.set(i, v);
+    }
+    const full = b === "c" ? CONFIG.castleHp : CONFIG.towerHp, hp = g.hp[i] ?? full;
+    v.g.userData.bar.visible = hp < full; v.g.userData.fg.scale.x = Math.max(0.02, hp / full); v.g.userData.fg.position.x = -(1 - hp / full) / 2;
+  });
+  for (const [i, v] of buildings) if (!want.has(i)) { burst(v.g.position, "#b9b3a8", 22, 4, 0.16); scene.remove(v.g); buildings.delete(i); }
+}
+function syncUnits(g, now, last) {
+  const ids = new Set();
+  for (const u of g.u) {
+    ids.add(u[0]);
+    let v = unitViews.get(u[0]);
+    if (!v) { v = { g: makeUnit(u[2], u[1]), kind: u[2], s: u[1], tile: u[3], path: null, lunge: null, dying: 0, born: now }; v.g.position.copy(tilePos(g.seed, u[3])); v.g.scale.setScalar(0.01); scene.add(v.g); unitViews.set(u[0], v); }
+    v.tile = u[3]; v.hp = u[4]; v.ready = u[1] === g.turn && (u[5] > 0 || u[6] > 0);
+    v.g.userData.pips.children.forEach((p, k) => (p.visible = k < u[4]));
+  }
+  for (const [id, v] of unitViews) if (!ids.has(id) && !v.dying) v.dying = now + (last && last.k === "attack" ? 380 : last && last.k === "turn" ? 650 : 0);
+}
+/** Animate the newest action for everyone: walking, an attack, a claim, a build, tower shots. */
+function playLast(g, now) {
+  const L = g.last, at = (t) => tilePos(g.seed, t), col = CONFIG.seatColors[L.s] || "#fff", who = nameOf(g, L.s);
+  if (L.k === "move") {
+    const v = unitViews.get(L.id);
+    if (v) { v.path = L.path.map((t) => at(t)); v.from = v.g.position.clone(); v.t0 = now; }
+    sound("step");
+    if (L.took >= 0) setTimeout(() => { burst(at(L.path[L.path.length - 1]), col, 14); pop(at(L.path[L.path.length - 1]), "Taken!", col); }, L.path.length * CONFIG.stepMs);
+  } else if (L.k === "attack") {
+    const v = unitViews.get(L.id), target = at(L.tile), cat = v && v.kind === 1;
+    if (v) v.lunge = { to: target, t0: now, cat };
+    const hit = () => {
+      burst(target, L.kill ? "#ffd166" : "#ff7a59", L.kill ? 30 : 14, L.kill ? 5 : 3); pop(target, `-${L.d}`, "#ffdf8a"); sound(L.kill ? "boom" : "hit");
+      if (L.back && v) pop(v.g.position, "-1", "#ff9b9b");
+      if (L.fell >= 0) { toast(`${who} took ${nameOf(g, L.fell)}'s castle!`); burst(target, col, 60, 6, 0.18); }
+    };
+    if (cat) shoot(at(L.from), target, 420, 2.2, hit); else setTimeout(hit, 200);
+  } else if (L.k === "claim") { burst(at(L.tile), col, 12, 2.5); sound("claim"); }
+  else if (L.k === "farm" || L.k === "tower") { burst(at(L.tile), "#e9dcc0", 16, 3); sound("build"); }
+  else if (L.k === "train") { burst(at(L.tile), col, 16, 3); sound("train"); }
+  else if (L.k === "turn") {
+    for (const [f, t, kill] of L.shots || []) shoot(at(f), at(t), 360, 1.2, () => { burst(at(t), kill ? "#ffd166" : "#ff7a59", kill ? 24 : 10); pop(at(t), `-${CONFIG.guardShot}`, "#ffdf8a"); sound("hit"); });
+    const mine = g.seats[L.s] === net.sessionId, cap = look(g).b.findIndex((b, i) => b === "c" && ownerOf(look(g), i) === L.s);
+    if (mine && cap >= 0 && L.inc) pop(at(cap), L.inc.map((v, k) => (v ? `+${v}${ICON[k]}` : "")).filter(Boolean).join(" "), "#fff");
+    if (mine) sound("turn");
+  }
+}
+const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
+function tickWorld(g, now, dt) {
+  for (const b of buildings.values()) {
+    const k = Math.min(1, (now - b.born) / 400); if (b.g.scale.x < 1) b.g.scale.setScalar(Math.max(0.01, 1 - (1 - k) ** 3));
+    if (b.g.userData.bar.visible) b.g.userData.bar.quaternion.copy(camera.quaternion).premultiply(tmpQ.copy(b.g.quaternion).invert());
+  }
+  for (const [id, v] of unitViews) {
+    const p = v.g.position, body = v.g.userData.body;
+    if (v.dying) {
+      if (now < v.dying) continue;
+      if (!v.burst) { v.burst = true; burst(p, CONFIG.seatColors[v.s], 18, 3); }
+      const k = (now - v.dying) / 400; v.g.scale.setScalar(Math.max(0.01, 1 - k)); p.y -= dt * 0.5;
+      if (k >= 1) { scene.remove(v.g); unitViews.delete(id); }
+      continue;
+    }
+    v.g.scale.setScalar(Math.min(1, v.g.scale.x + dt * 4));
+    if (v.path) {
+      const t = (now - v.t0) / CONFIG.stepMs, i = Math.floor(t);
+      if (i >= v.path.length) { p.copy(v.path[v.path.length - 1]); v.path = null; }
+      else { const a = i === 0 ? v.from : v.path[i - 1], b = v.path[i]; p.lerpVectors(a, b, ease(t - i)); p.y += Math.sin((t - i) * Math.PI) * 0.25; face(v, b.x - a.x, b.z - a.z); }
+    } else {
+      tilePos(g.seed, v.tile, tmpV); p.lerp(tmpV, Math.min(1, dt * 8));
+    }
+    body.position.set(0, 0, 0);
+    if (v.lunge) {
+      const k = (now - v.lunge.t0) / 380;
+      if (k >= 1) v.lunge = null;
+      else { tmpV2.subVectors(v.lunge.to, p).setY(0).normalize(); face(v, tmpV2.x, tmpV2.z); if (!v.lunge.cat) body.position.copy(tmpV2.multiplyScalar(Math.sin(k * Math.PI) * 0.45)); else body.rotation.x = -Math.sin(k * Math.PI) * 0.3; }
+    }
+    // units that can still act this turn bob a little
+    body.position.y += v.ready && g.phase === "play" ? Math.abs(Math.sin(now / 300 + id)) * 0.06 : 0;
+    v.g.userData.pips.quaternion.copy(camera.quaternion).premultiply(tmpQ.copy(v.g.quaternion).invert());
+  }
+}
+const tmpQ = new THREE.Quaternion();
+function face(v, dx, dz) { if (dx || dz) v.g.rotation.y = Math.atan2(dx, dz); }
+
+// ── MY TURN ─────────────────────────────────────────────────────────────────────────
+let sel = { tile: -1 }, hintUntil = performance.now() + 20000;
+const mySeat = (g) => g.seats.indexOf(net.sessionId);
+const myTurn = (g) => g.phase === "play" && g.turn === mySeat(g) && !g.out[g.turn];
+/** The unit I have selected (mine, with something left to do), or null. */
+function selUnit(g) { const x = look(g), u = sel.tile >= 0 && unitOn(x, sel.tile); return u && myTurn(g) && u[1] === g.turn && (u[5] > 0 || u[6] > 0) ? u : null; }
+function act(a) {
+  const g = game(); if (!g || !myTurn(g)) return;
+  const msg = { g: g.id, tt: g.tt, a };
+  hintUntil = 0;
+  if (isHost()) hostAct(net.sessionId, msg); else net.send("act", msg);
+}
+/** A tap on hex t: move or attack with the selected unit, else select what's there. */
+function tapTile(t) {
+  const g = game(); if (!g) return;
+  const u = selUnit(g), x = look(g);
+  if (u && t >= 0) {
+    if (targetsOf(x, u).includes(t)) { act({ k: "attack", id: u[0], tile: t }); sel.tile = -1; return; }
+    if (reachable(x, u).has(t)) { act({ k: "move", id: u[0], tile: t }); sel.tile = t; return; }
+  }
+  if (t >= 0 && myTurn(g) && canClaim(x, g.turn, t) && afford(g.res[g.turn], CONFIG.cost.claim)) { act({ k: "claim", tile: t }); sel.tile = t; return; } // gold hexes claim in one tap
+  sel.tile = t === sel.tile ? -1 : t;
+}
+// Markers: blue = walk here, red = attack this, gold = land you can claim, white = selected.
+const ringMat = (c, o) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, depthWrite: false });
+const marks = { walk: new THREE.InstancedMesh(G.ring, ringMat("#6fd6ff", 0.95), 40), hit: new THREE.InstancedMesh(G.ring, ringMat("#ff4d4d", 0.95), 40), claim: new THREE.InstancedMesh(G.ring, ringMat("#ffd166", 0.55), 80), sel: new THREE.InstancedMesh(G.ring, ringMat("#ffffff", 1), 1) };
+for (const m of Object.values(marks)) { m.count = 0; m.renderOrder = 2; scene.add(m); }
+function showMarks(g, now) {
+  for (const m of Object.values(marks)) m.count = 0;
+  const x = look(g), put = (m, t, s = 1) => { dummy.position.set(TILES[t].x, topOf(g.seed, t) + 0.03, TILES[t].z); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(s); dummy.updateMatrix(); m.setMatrixAt(m.count++, dummy.matrix); };
+  const pulse = 1 + Math.sin(now / 220) * 0.05, u = selUnit(g);
+  if (u) { for (const [t] of reachable(x, u)) put(marks.walk, t, pulse); for (const t of targetsOf(x, u)) put(marks.hit, t, pulse); }
+  else if (myTurn(g) && afford(g.res[g.turn], CONFIG.cost.claim)) x.o.forEach((_, t) => { if (canClaim(x, g.turn, t) && marks.claim.count < 80) put(marks.claim, t, 0.96); });
+  if (sel.tile >= 0) put(marks.sel, sel.tile, 1.02);
+  for (const m of Object.values(marks)) m.instanceMatrix.needsUpdate = true;
+}
+
+// ── HUD & RESULTS ───────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const nameOf = (g, s) => { const id = g.seats[s]; return id === "bot" ? CONFIG.botNames[s] : id === net.sessionId ? myName : String(S.entities.players[id]?.n || "Player").slice(0, 16); };
+const colorOfPlayer = (id) => (id === net.sessionId ? myColor : S.entities.players[id]?.c || "#ccc");
+const costText = (c) => c.map((v, k) => (v ? v + ICON[k] : "")).join("");
+let toastAt = 0, dropped = false, resultsFor = -1, closedFor = -1, board = null, seatsSeen = null, panelKey = "";
+function toast(text) { $("toast").textContent = text; $("toast").style.opacity = 1; toastAt = performance.now(); }
+function hud(g) {
+  const now = performance.now(), me = mySeat(g), x = look(g);
+  if (now - toastAt > 2800) $("toast").style.opacity = 0;
+  if (ATTRACT) { for (const id of ["top", "panel", "net", "toast"]) $(id).classList.add("hide"); return; }
+  $("chips").innerHTML = [0, 1, 2, 3].map((s) => {
+    const id = g.seats[s], dot = id === "bot" ? "" : `<i class="dot" style="background:${esc(colorOfPlayer(id))}"></i>`;
+    return `<div class="chip${g.phase === "play" && g.turn === s ? " turn" : ""}${g.out[s] ? " out" : ""}" style="--c:${CONFIG.seatColors[s]}"><span class="sw" style="background:${CONFIG.seatColors[s]}">${score(x, s)}</span><span class="nm">${dot}${esc(id === net.sessionId ? "You" : nameOf(g, s))}</span></div>`;
+  }).join("");
+  const prev = seatsSeen; seatsSeen = { id: g.id, seats: g.seats.slice() };
+  if (prev && prev.id === g.id) for (let s = 0; s < 4; s++) if (prev.seats[s] !== g.seats[s]) toast(`${g.seats[s] === net.sessionId ? "You" : nameOf(g, s)} took over ${CONFIG.seatNames[s].toLowerCase()}`);
+  const secs = Math.max(0, Math.ceil((g.endsAt - Date.now()) / 1000)), who = nameOf(g, g.turn), bot = g.seats[g.turn] === "bot";
+  $("status").textContent = g.phase === "over" ? (g.win === me ? "You win!" : `${nameOf(g, g.win)} wins!`)
+    : myTurn(g) ? `Your turn · ${secs}s` + (now < hintUntil ? " · tap gold hexes to claim land" : "")
+    : (bot ? `${who} is planning…` : `${who}'s turn · ${secs}s`) + (me < 0 ? " · you're watching" : g.out[me] ? " · your castle fell" : "");
+  panel(g, me, x);
+  if (g.phase === "over" && resultsFor !== g.id) showResults(g, me);
+  $("over").hidden = g.phase !== "over" || closedFor === g.id;
+  const n = livePlayers().length;
+  $("net").textContent = net.offline ? "Offline: playing with bots" : dropped ? "Reconnecting…" : `Online · ${n} player${n === 1 ? "" : "s"}${isHost() ? " · you run the game" : ""}`;
+}
+/** The bottom panel: my resources, what the selected hex is, and what I can do there. */
+function panel(g, me, x) {
+  const p = $("panel");
+  p.hidden = me < 0 || (g.phase === "over" && closedFor !== g.id);
+  if (p.hidden) return;
+  const res = g.res[me], inc = income(x, me), mine = myTurn(g), t = sel.tile, terr = mapOf(g.seed).terr;
+  const btns = [];
+  let info = mine ? "Tap a hex: gold = land to claim, your castle = train units, your units = move" : "Waiting for your turn…";
+  if (g.phase === "over") { info = "The match is over."; btns.push(["again", "Play again", null]); }
+  else if (t >= 0) {
+    const own = ownerOf(x, t), u = unitOn(x, t), b = x.b[t], T = TERRAIN[terr[t]];
+    const parts = [T.name + (T.yield.some(Boolean) ? ` (+1${ICON[T.yield.indexOf(1)]})` : ""), own < 0 ? "free" : own === me ? "yours" : nameOf(g, own) + "'s"];
+    if (b !== "-") parts.push({ f: "Farm (+2🌾)", t: `Tower ${g.hp[t] ?? CONFIG.towerHp}/${CONFIG.towerHp}`, c: `Castle ${g.hp[t] ?? CONFIG.castleHp}/${CONFIG.castleHp}` }[b]);
+    if (u) parts.push(`${u[1] === me ? "your" : nameOf(g, u[1]) + "'s"} ${CONFIG.units[u[2]].name.toLowerCase()} ${u[4]}/${CONFIG.units[u[2]].hp}`);
+    info = parts.join(" · ");
+    if (mine) {
+      if (u && u[1] === me) info += u[5] > 0 || u[6] > 0 ? " · tap blue to walk, red to attack" : " · done this turn";
+      if (canClaim(x, me, t)) btns.push(["claim", "Claim", CONFIG.cost.claim]);
+      if (own === me && b === "-" && terr[t] === "g") btns.push(["farm", "Farm", CONFIG.cost.farm]);
+      if (own === me && b === "-") btns.push(["tower", "Tower", CONFIG.cost.tower]);
+      if (own === me && b === "c" && !u && myUnits(x, me).length < CONFIG.maxUnits) { btns.push(["soldier", "Soldier", CONFIG.cost.soldier]); btns.push(["catapult", "Catapult", CONFIG.cost.catapult]); }
+    }
+  }
+  if (mine) btns.push(["end", "End turn", null]);
+  const ready = mine && x.u.some((u) => u[1] === me && (u[5] > 0 || u[6] > 0));
+  const key = JSON.stringify([res, inc, g.round, info, btns.map((b) => b[0] + (b[2] ? afford(res, b[2]) : "")), ready]);
+  if (key === panelKey) return;
+  panelKey = key;
+  $("res").innerHTML = res.map((v, k) => `<span>${ICON[k]} ${v}<small>+${inc[k]}</small></span>`).join("") + `<span class="rd">Round ${Math.min(g.round, CONFIG.rounds)}/${CONFIG.rounds}</span>`;
+  $("info").textContent = info;
+  $("acts").innerHTML = btns.map(([a, label, c]) => a === "end" ? `<button id="end" data-a="end" class="${ready ? "" : "pulse"}">End turn</button>`
+    : `<button data-a="${a}"${c && !afford(res, c) ? " disabled" : ""}>${label}${c ? `<small>${costText(c)}</small>` : ""}</button>`).join("");
+}
+$("acts").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || b.disabled) return;
+  const a = b.dataset.a, t = sel.tile;
+  if (a === "again") return playAgain();
+  if (a === "end") { sel.tile = -1; return act({ k: "end" }); }
+  if (a === "soldier" || a === "catapult") return act({ k: "train", tile: t, kind: a === "catapult" ? 1 : 0 });
+  act({ k: a, tile: t });
+});
+function showResults(g, me) {
+  resultsFor = g.id;
+  const won = me >= 0 && g.win === me, x = look(g);
+  $("overTitle").textContent = won ? "You win!" : `${nameOf(g, g.win)} wins`;
+  $("overWhy").textContent = g.why + ".";
+  const order = [0, 1, 2, 3].sort((a, b) => (b === g.win) - (a === g.win) || (g.out[a] - g.out[b]) || score(x, b) - score(x, a));
+  $("standings").innerHTML = order.map((s) => `<li><i class="sq" style="background:${CONFIG.seatColors[s]}"></i>${esc(nameOf(g, s))}${s === me ? " (you)" : ""}<span>${g.out[s] ? "castle fell" : score(x, s) + " pts"}</span></li>`).join("");
+  $("again").classList.toggle("hide", me < 0);
+  sound(won ? "win" : "boom");
+  const list = $("board");
+  if (!board) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
+  list.innerHTML = "<li>Loading…</li>";
+  (won ? board.submit(1, "inc").catch(() => null) : Promise.resolve()).then(() => board.top(10)).then(({ entries }) => {
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${e.score}</span></li>`).join("") : "<li>No wins yet. Be the first.</li>";
+  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+}
+function playAgain() { const g = game(); if (!g || g.phase !== "over") return; const msg = { g: g.id }; if (isHost()) hostAgain(net.sessionId, msg); else net.send("again", msg); }
+$("again").onclick = playAgain;
+$("look").onclick = () => { closedFor = game()?.id ?? -1; };
+let actx = null; // sounds start after the first tap or key (browsers require it)
+const wake = () => { if (!actx) try { actx = new AudioContext(); } catch {} };
+addEventListener("pointerdown", wake); addEventListener("keydown", wake);
+function tone(f0, f1, ms, type = "triangle", vol = 0.14, delay = 0) {
+  const t = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + ms / 1000);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + ms / 1000);
+  o.connect(g).connect(actx.destination); o.start(t); o.stop(t + ms / 1000 + 0.05);
+}
+function sound(kind) {
+  if (!actx || ATTRACT) return;
+  if (kind === "claim") tone(520, 780, 120, "triangle", 0.12);
+  else if (kind === "build") { tone(180, 120, 140, "square", 0.08); tone(240, 160, 140, "square", 0.06, 0.12); }
+  else if (kind === "train") [392, 523].forEach((f, i) => tone(f, f, 150, "sawtooth", 0.06, i * 0.1));
+  else if (kind === "step") tone(300, 220, 60, "sine", 0.06);
+  else if (kind === "hit") tone(260, 70, 220, "sawtooth", 0.12);
+  else if (kind === "boom") { tone(160, 40, 500, "sawtooth", 0.16); tone(700, 120, 260, "square", 0.05); }
+  else if (kind === "turn") tone(660, 990, 180, "sine", 0.1);
+  else if (kind === "win") [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 260, "triangle", 0.16, i * 0.12));
+}
+
+// ── INPUT / LOOP ────────────────────────────────────────────────────────────────────
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.45), hit = new THREE.Vector3();
+/** The hex under a screen point (through the camera that drew the frame), or -1. */
+function hexAt(px, py) {
+  ndc.set((px / innerWidth) * 2 - 1, -(py / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if (!ray.ray.intersectPlane(ground, hit)) return -1;
+  const fq = (SQ3 / 3) * hit.x - hit.z / 3, fr = (2 / 3) * hit.z, fs = -fq - fr;
+  let q = Math.round(fq), r = Math.round(fr); const s = Math.round(fs);
+  const dq = Math.abs(q - fq), dr = Math.abs(r - fr), ds = Math.abs(s - fs);
+  if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s;
+  return tileAt(q, r);
+}
+renderer.domElement.addEventListener("pointerdown", (e) => { e.preventDefault(); tapTile(hexAt(e.clientX, e.clientY)); });
+addEventListener("keydown", (e) => {
+  if (e.key === "Escape") sel.tile = -1;
+  if (e.key === "Enter" || e.key === "e") { const g = game(); if (g && myTurn(g)) { sel.tile = -1; act({ k: "end" }); } }
+});
+document.addEventListener("touchmove", (e) => { if (!e.target.closest(".card")) e.preventDefault(); }, { passive: false });
+
+/** The camera sits behind your castle and backs off until the island fits between the HUD and the panel. */
+const camAt = new THREE.Vector3(), camGoal = new THREE.Vector3();
+let camAngle = 0;
+function aimCamera(dt, g, now) {
+  const portrait = innerHeight > innerWidth, elev = ATTRACT ? 0.8 : portrait ? 1.28 : 0.95;
+  let want = 0;
+  if (g) { const s = mySeat(g), cap = mapOf(g.seed).caps[s >= 0 ? s : 0]; want = Math.atan2(TILES[cap].x, TILES[cap].z); }
+  if (ATTRACT) want = 0.4 + now / 16000;
+  camAngle += Math.atan2(Math.sin(want - camAngle), Math.cos(want - camAngle)) * Math.min(1, dt * (ATTRACT ? 10 : 2.5));
+  const top = ATTRACT ? 0 : $("top").offsetHeight + 14, bottom = ATTRACT ? 0 : ($("panel").hidden ? 30 : $("panel").offsetHeight + 30);
+  const avail = Math.max(120, innerHeight - top - bottom), vf = THREE.MathUtils.degToRad(camera.fov) / 2, hf = Math.atan(Math.tan(vf) * camera.aspect);
+  const vEff = Math.atan((Math.tan(vf) * avail) / innerHeight), hEff = Math.atan(Math.tan(hf) * 0.96), B = R * SQ3 + 0.6;
+  const dist = ATTRACT ? 14.5 : Math.max((B * Math.sin(elev)) / Math.tan(vEff), B / Math.tan(hEff)) + B * Math.cos(elev);
+  scene.fog.near = dist * 1.2; scene.fog.far = dist * 3;
+  camera.setViewOffset(innerWidth, innerHeight, 0, -((top + innerHeight - bottom) / 2 - innerHeight / 2), innerWidth, innerHeight);
+  camGoal.set(Math.sin(camAngle) * Math.cos(elev) * dist, Math.sin(elev) * dist, Math.cos(camAngle) * Math.cos(elev) * dist);
+  if (!camAt.lengthSq()) camAt.copy(camGoal);
+  camAt.lerp(camGoal, Math.min(1, dt * 4));
+  camera.position.copy(camAt); camera.lookAt(0, ATTRACT ? -1 : 0, 0);
+}
+
+let myName = "", myColor = COLORS[0], last = performance.now(), lastHb = 0, lastHud = 0;
+try { myName = localStorage.getItem("mpa-name") || ""; } catch {}
+const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
+if (!myName) { myName = pickOne(NAME_A) + " " + pickOne(NAME_B); try { localStorage.setItem("mpa-name", myName); } catch {} }
+if (ATTRACT) { Object.assign(CONFIG, { botStepMs: 170, stepMs: 120, resultsMs: 2500 }); $("net").textContent = ""; }
+/** Two people joined at once with one color: the one with the higher sessionId picks a free one. (Bots show their empire color, never these.) */
+function fixColor() {
+  const others = Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId);
+  if (!others.some(([id, p]) => p.c === myColor && id < net.sessionId)) return;
+  const taken = new Set(others.map(([, p]) => p.c)), free = COLORS.find((c) => !taken.has(c));
+  if (free) { myColor = free; net.me.set("c", free); }
+}
+
+function frame(now) {
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; // the first frame can be stamped before `last`
+  if (now - lastHb > 1000) { lastHb = now; net.me.set("hb", Date.now()); fixColor(); }
+  if (isHost()) hostTick();
+  const g = game();
+  if (g) {
+    syncWorld(g, now);
+    if (sel.tile >= 0 && g.phase !== "play") sel.tile = -1;
+    showMarks(g, now);
+    tickWorld(g, now, dt);
+    if (now - lastHud > 100) { lastHud = now; hud(g); }
+  }
+  partsTick(dt); shotsTick(now); popsTick(dt);
+  aimCamera(dt, g, now);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+(async function start() {
+  net = await connect();
+  net.onState((st) => { S = st; });
+  net.on("act", (m, from) => { if (isHost() && m) hostAct(from, m); });
+  net.on("again", (m, from) => { if (isHost() && m) hostAgain(from, m); });
+  net.onDisconnect(() => { dropped = true; $("net").textContent = "Reconnecting…"; });
+  net.onReconnect(() => { dropped = false; });
+  if (!net.offline && typeof MP !== "undefined") board = MP.auth({ key: MP_CONNECT.key, apiUrl: MP_CONNECT.apiUrl }).leaderboard(CONFIG.board);
+  const takenColors = new Set(Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId).map(([, p]) => p.c));
+  myColor = COLORS.find((c) => !takenColors.has(c)) || pickOne(COLORS);
+  net.me.set({ n: myName, c: myColor, hb: Date.now() });
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "Hex Empires",
+  "genre": "strategy",
+  "dim": "3D",
+  "mode": "Turn-based",
+  "players": "2–4",
+  "hook": "Claim the island. Build, march, take their castles.",
+  "how": "Each turn your land makes food, wood and stone. Spend it to claim hexes, build farms and towers, and train soldiers and catapults. Take every rival castle, or have the biggest empire after 16 rounds. Bots rule the empty empires.",
+  "controls": "Click or tap a hex: gold hexes claim land, your castle trains units, your units walk (blue) and attack (red). End turn when you're done",
+  "uses": [
+    ["Host-run rules", "The host's browser checks every action and plays the bot empires; if it leaves, the next player takes over."],
+    ["Bots", "Bots rule every empty empire, so you can play alone, and a friend who joins takes over a bot's empire mid-match."],
+    ["Live sync", "Everyone sees the same seeded island, armies and borders; the match carries on if someone reloads while another player stays."],
+    ["Leaderboard", "Most wins, shown after every match."]
+  ],
+  "ideas": [
+    "Add a market that trades wood for stone",
+    "Add knights that move three hexes",
+    "Make the island bigger with a lake in the middle"
+  ]
+}
