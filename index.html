@@ -43,6 +43,7 @@
   .card h3 { margin: 8px 0 4px; font-size: 13px; color: #ffd166; text-align: left; }
   .card ol { text-align: left; margin: 0 0 12px; padding-left: 24px; font-size: 14px; min-height: 24px; }
   .card li span { float: right; }
+  .card li.note { list-style: none; margin-left: -24px; text-align: center; opacity: .8; } /* a message, not a ranked row */
   .card .sq { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
   .card button { width: 100%; min-height: 48px; border-radius: 12px; border: 0; font: 700 16px system-ui, sans-serif; cursor: pointer; margin-top: 8px; }
   #again { background: #ffd166; color: #2a1d00; } #look { background: #ffffff1a; color: #fff; }
@@ -63,7 +64,7 @@
 <div id="over" hidden><div class="card">
   <h2 id="overTitle"></h2><p id="overWhy"></p>
   <ol id="standings"></ol>
-  <h3>Most wins</h3><ol id="board"><li>Loading…</li></ol>
+  <h3>Most wins</h3><ol id="board"><li class="note">Loading…</li></ol>
   <button id="again">Play again</button><button id="look">Look at the map</button>
 </div></div>
 <script type="module">
@@ -690,7 +691,7 @@ function popsTick(dt) {
   }
 }
 // Shots in flight: tower arrows and catapult stones.
-const shots = [], shotMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.09, 8, 6), mat("#3a3530"), 32);
+const shots = [], shotMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.14, 8, 6), mat("#3a3530"), 32);
 shotMesh.count = 0; shotMesh.frustumCulled = false; scene.add(shotMesh);
 function shoot(from, to, ms, arc, onHit) { shots.push({ a: from.clone().setY(from.y + 0.8), b: to.clone().setY(to.y + 0.4), t0: performance.now(), ms, arc, onHit }); }
 function shotsTick(now) {
@@ -935,11 +936,11 @@ function showResults(g, me) {
   $("again").classList.toggle("hide", me < 0);
   sound(won ? "win" : "boom");
   const list = $("board");
-  if (!board) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
-  list.innerHTML = "<li>Loading…</li>";
+  if (!board) { list.innerHTML = "<li class='note'>Leaderboards need a connection.</li>"; return; }
+  list.innerHTML = "<li class='note'>Loading…</li>";
   (won ? board.submit(1, "inc").catch(() => null) : Promise.resolve()).then(() => board.top(10)).then(({ entries }) => {
-    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${e.score}</span></li>`).join("") : "<li>No wins yet. Be the first.</li>";
-  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${e.score}</span></li>`).join("") : "<li class='note'>No wins yet. Be the first.</li>";
+  }).catch(() => { list.innerHTML = "<li class='note'>Couldn't load the leaderboard.</li>"; });
 }
 function playAgain() { const g = game(); if (!g || g.phase !== "over") return; const msg = { g: g.id }; if (isHost()) hostAgain(net.sessionId, msg); else net.send("again", msg); }
 $("again").onclick = playAgain;
@@ -978,10 +979,11 @@ function hexAt(px, py) {
   if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s;
   return tileAt(q, r);
 }
-renderer.domElement.addEventListener("pointerdown", (e) => { e.preventDefault(); tapTile(hexAt(e.clientX, e.clientY)); });
+renderer.domElement.addEventListener("pointerdown", (e) => { e.preventDefault(); if (e.button === 0) tapTile(hexAt(e.clientX, e.clientY)); }); // left button or a touch only
+renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault()); // no browser menu on right-click
 addEventListener("keydown", (e) => {
   if (e.key === "Escape") sel.tile = -1;
-  if (e.key === "Enter" || e.key === "e") { const g = game(); if (g && myTurn(g)) { sel.tile = -1; act({ k: "end" }); } }
+  if (e.key === "Enter" || e.code === "KeyE") { const g = game(); if (g && myTurn(g)) { sel.tile = -1; act({ k: "end" }); } }
 });
 document.addEventListener("touchmove", (e) => { if (!e.target.closest(".card")) e.preventDefault(); }, { passive: false });
 
